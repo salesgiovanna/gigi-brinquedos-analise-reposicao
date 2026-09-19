@@ -1,0 +1,164 @@
+// GIGI BRINQUEDOS | PRINCIPAIS MEDIDAS DAX
+
+/* Medidas utilizadas no dashboard para análise comercial,
+ estoque, recomendação de reposição e simulação de orçamento.*/
+
+
+// ============================================================
+// 1. INDICADORES COMERCIAIS
+
+/* Faturamento total considerando quantidade vendida
+ e preço unitário de cada produto.*/
+
+Faturamento =
+SUMX(
+    vendas_processed,
+    vendas_processed[Quantidade] *
+    RELATED(produtos_processed[Preco_Produto])
+)
+
+
+// Ticket médio por venda.
+
+Ticket_medio = DIVIDE([Faturamento], COUNT(vendas_processed[ID_Venda]))
+
+
+// Quantidade de unidades vendidas no período selecionado.
+
+Unidades_vendidas_no_periodo = SUM(vendas_processed[Quantidade])
+
+// ============================================================
+// 2. DEMANDA E ESTOQUE
+
+/* Demanda média mensal com base nas unidades vendidas
+ e na quantidade de meses presentes no período selecionado.*/
+
+Demanda média mensal = DIVIDE([Unidades_vendidas_no_periodo], DISTINCTCOUNT(calendario_processed[AnoMes]))
+
+
+// Quantidade atual disponível em estoque.
+
+Estoque atual = SUM(inventario_processed[Estoque_Atual])
+
+
+/* Número estimado de meses que o estoque atual consegue
+ atender considerando a demanda média mensal.*/
+
+Meses de cobertura = DIVIDE([Estoque atual], [Demanda média mensal])
+
+
+// ============================================================
+// 3. RECOMENDAÇÃO DE REPOSIÇÃO
+
+/* Estoque necessário para manter dois meses de cobertura
+ com base na demanda média mensal.*/
+
+Estoque alvo = [Demanda média mensal] * 2
+
+
+// Quantidade sugerida para reposição.
+// Caso o estoque atual já seja suficiente, a sugestão é zero.
+
+Sugestão de compra =
+VAR Necessidade = [Estoque alvo] - [Estoque atual]
+
+RETURN MAX(Necessidade, 0)
+
+
+// ============================================================
+// 4. PRIORIDADE DE REPOSIÇÃO
+
+/* Classificação da prioridade de reposição com base
+ na demanda média mensal e nos meses de cobertura.*/
+
+Prioridade reposição =
+VAR Demanda = [Demanda média mensal]
+
+VAR Cobertura = [Meses de cobertura]
+
+RETURN
+    IF(
+        ISBLANK(Demanda) || Demanda = 0,
+        "Sem demanda",
+        SWITCH(
+            TRUE(),
+            Cobertura < 0.5, "Crítica",
+            Cobertura < 1, "Alta",
+            Cobertura < 2, "Média",
+            "Sem necessidade"
+        )
+    )
+
+/* Controla quais prioridades devem ser consideradas
+ de acordo com a seleção realizada no slicer.*/
+
+Exibir por Prioridade =
+VAR PrioridadeAtual = [Prioridade reposição]
+
+VAR TemFiltro = ISFILTERED('Filtro Prioridade'[Prioridade])
+
+RETURN
+    IF(
+        NOT TemFiltro
+            || PrioridadeAtual IN VALUES('Filtro Prioridade'[Prioridade]),
+        1,
+        0
+    )
+
+
+//============================================================
+// 5. SIMULAÇÃO DE ORÇAMENTO
+
+/* Custo estimado da reposição considerando apenas
+as prioridades selecionadas no dashboard.*/
+
+Custo da reposição =
+SUMX(
+    inventario_processed,
+    IF(
+        [Exibir por Prioridade] = 1,
+        [Sugestão de compra] *
+        RELATED(produtos_processed[Custo_Produto]),
+        0
+    )
+)
+
+// Valor de orçamento selecionado pelo usuário.
+// Caso não haja seleção, considera R$ 400.000.
+
+Valor Orçamento de Compras =
+SELECTEDVALUE(
+    'Orçamento de Compras'[Orçamento de Compras],
+    400000
+)
+
+
+/* Percentual do orçamento comprometido pelo custo
+ estimado da reposição.*/
+
+% Orçamento Comprometido =
+DIVIDE([Custo da reposição],'Orçamento de Compras'[Valor Orçamento de Compras])
+
+
+// Saldo restante após considerar o custo da reposição.
+
+Saldo do Orçamento = 'Orçamento de Compras'[Valor Orçamento de Compras] - [Custo da reposição]
+
+
+/* Total de unidades sugeridas para compra considerando
+as prioridades selecionadas no dashboard.*/
+
+Unidades Sugeridas para Compra =
+SUMX(
+    inventario_processed,
+    IF(
+        [Exibir por Prioridade] = 1,
+        [Sugestão de compra],
+        0
+    )
+)
+
+
+// Limite de 100% utilizado como valor máximo do indicador "Orçamento utilizado" da página 3 do dashboard.
+
+Máximo Orçamento % = 1
