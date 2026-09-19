@@ -81,7 +81,7 @@ Apresenta os principais indicadores de desempenho comercial da Gigi Brinquedos, 
 
 A página também permite analisar a evolução mensal do faturamento e comparar o desempenho entre estados, lojas e produtos.
 
-![Visão Geral do Dashboard](Images/gigi_brinquedos_visao_geral.png.png)
+![Visão Geral do Dashboard](Images/gigi_brinquedos_visao_geral.png)
 
 
 ### 🛍️ Página 2 — Produtos e Vendas
